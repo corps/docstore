@@ -1,0 +1,18 @@
+{
+  "name": "docstore",
+  "version": "1.0.0",
+  "description": "",
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "pulp": "^12.3.0",
+    "redux-indexers": "^1.1.0",
+    "yargs": "^12.0.1"
+  },
+  "scripts": {
+    "prepublish": "npm run psc-install && npm run purescript-compile",
+    "psc-install": "psc-package install",
+    "purescript-compile": "psc-package build",
+    "test": "node -e \"require('./output/Test.Main').main()\""
+  }
+}
