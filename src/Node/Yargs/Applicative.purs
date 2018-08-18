@@ -141,7 +141,7 @@ flag :: String -> Array String -> Maybe String -> Y Boolean
 flag key aliases desc = yarg key aliases desc (Left false) false
 
 -- | Get the raw command line arguments object.
-rest :: Y (Array Foreign)
+rest :: Y (Array String)
 rest = Y { setup: mempty
-         , read: readProp "_" >=> readArray
+         , read: readOneOrMany readString "_"
          }
