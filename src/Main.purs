@@ -129,18 +129,19 @@ processOcr :: ProcessFile String
 processOcr = do
   config <- getConfig
   liftAff do
-    let jpegFile = tmpFile config ".png"
+    let tiffFile = tmpFile config ".tiff"
     let ocrFile = tmpFile config ".ocr"
-    ensureRun "convert \"$1\" \"$2\"" [config.filePath, jpegFile]
-    ensureRun "tesseract \"$1\" \"$2\"" [jpegFile, ocrFile]
-    pure ocrFile
+    ensureRun "convert -density 300 \"$1\" -depth 8 \"$2\"" [config.filePath, tiffFile]
+    ensureRun ("tesseract $(realpath --relative-to=\"$PWD\" \"$1\") " <>
+              "$(realpath --relative-to=\"$PWD\" \"$2\")") [tiffFile, ocrFile]
+    pure $ ocrFile <> ".txt"
 
 processTags :: ProcessFile String
 processTags = do
   config <- getConfig
   liftAff do
     let tagsFile = tmpFile config ".tags"
-    ensureRun "echo \"$1\" \"$2\"" [joinWith "\n" config.tags, tagsFile]
+    ensureRun "echo \"$1\" > \"$2\"" [joinWith "\n" config.tags, tagsFile]
     pure tagsFile
 
 storeFile :: String -> Tuple String String -> ProcessFile Unit
