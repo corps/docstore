@@ -15,7 +15,7 @@ in
 stdenv.mkDerivation {
   name = packageJson.name;
 
-  buildInputs = [ nodejs purescript psc-package git ];
+  buildInputs = [ nodejs purescript psc-package git tesseract ];
 
   src = builtins.filterSource (path: type:
       type != "unknown" &&
