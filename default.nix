@@ -15,7 +15,7 @@ in
 stdenv.mkDerivation {
   name = packageJson.name;
 
-  buildInputs = [ nodejs purescript psc-package git tesseract ];
+  buildInputs = [ nodejs purescript psc-package git tesseract imagemagick ghostscript ];
 
   src = builtins.filterSource (path: type:
       type != "unknown" &&
