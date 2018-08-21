@@ -3,7 +3,7 @@ module Main where
 import Prelude
 
 import Control.Alt ((<|>))
-import Control.Applicative (class Applicative)
+import Control.Applicative (class Applicative, when)
 import Control.Apply (class Apply)
 import Control.Bind (class Bind)
 import Control.Monad (class Monad)
@@ -13,6 +13,7 @@ import Data.Foldable (traverse_)
 import Data.Function (const)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid (class Monoid)
+import Data.Newtype (class Newtype)
 import Data.Semigroup (class Semigroup)
 import Data.String.Common (joinWith, trim)
 import Data.Tuple (Tuple(..), fst, snd)
@@ -28,8 +29,14 @@ import Node.Yargs.Setup (usage)
 import Paths (PathFormat, formatPath, nodePath, parsePath)
 import Runner (ensureRun, runAndCapture)
 
+newtype StoreBase = StoreBase String
+derive instance storeBaseNewtype :: Newtype StoreBase _
+
+storePath :: StoreBase -> String -> String
+storePath (StoreBase a) b = a <> b
+
 type StoreConfig = 
-  { storeBase :: String
+  { storeBase :: StoreBase
   , formatPath :: PathFormat -> String
   , parsePath :: String -> PathFormat
   , filePath :: String
@@ -64,28 +71,28 @@ runFileProcess :: forall a. ProcessFile a -> StoreConfig -> Aff a
 runFileProcess p config = 
   case prepareDirs *> p of ProcessFile p' -> p' config
 
-originalsDir :: StoreConfig -> String
-originalsDir c = c.storeBase <> "/originals"
+originalsDir :: StoreBase -> String
+originalsDir base = base `storePath` "/originals"
 
-tagsDir :: StoreConfig -> String
-tagsDir c = c.storeBase <> "/tags"
+tagsDir :: StoreBase -> String
+tagsDir base = base `storePath` "/tags"
 
-ocrDir :: StoreConfig -> String
-ocrDir c = c.storeBase <> "/ocr"
+ocrDir :: StoreBase -> String
+ocrDir base = base `storePath` "/ocr"
 
 allDirs :: StoreConfig -> Array String
-allDirs c = map (_ $ c) [originalsDir, tagsDir, ocrDir]
+allDirs c = map (_ $ c.storeBase) [originalsDir, tagsDir, ocrDir]
 
 originalOutputPath :: StoreConfig -> Tuple String String
-originalOutputPath c = Tuple (originalsDir c) (c.sha1 <> originalExt)
+originalOutputPath c = Tuple (originalsDir c.storeBase) (c.sha1 <> originalExt)
   where
     originalExt = (c.parsePath c.filePath).ext
 
 tagsOutputPath :: StoreConfig -> Tuple String String
-tagsOutputPath c = Tuple (tagsDir c) (c.sha1 <> ".txt")
+tagsOutputPath c = Tuple (tagsDir c.storeBase) (c.sha1 <> ".txt")
 
 ocrOutputPath :: StoreConfig -> Tuple String String
-ocrOutputPath c = Tuple (ocrDir c) (c.sha1 <> ".txt")
+ocrOutputPath c = Tuple (ocrDir c.storeBase) (c.sha1 <> ".txt")
 
 getConfig :: ProcessFile StoreConfig
 getConfig = ProcessFile $ pure 
@@ -99,22 +106,22 @@ prepareDirs = do
   let dirs = allDirs config
   liftAff $ traverse_ (\d -> ensureRun "mkdir -p \"$1\"" [d]) dirs
 
-findDropboxHome :: Effect String
-findDropboxHome = do
+findStoreBase :: Effect StoreBase
+findStoreBase = do
   winhome <- lookupEnv "WINHOME"
   home <- lookupEnv "HOME"
   case winhome <|> home of
-    Just trueHome -> pure $ trueHome <> "/Dropbox"
+    Just trueHome -> pure $ StoreBase $ trueHome <> "/Dropbox/store"
     Nothing -> throwException $ error "Could not determine Dropbox root"
 
 prepareStoreConfig :: Array String -> String -> Aff StoreConfig
 prepareStoreConfig tags filePath = do
-  dropboxHome <- liftEffect $ findDropboxHome
+  storeBase <- liftEffect $ findStoreBase
   pathLib <- liftEffect $ nodePath
   uncleanSha <- runAndCapture "cat \"$1\" | sha1sum | awk '{ print $1 }'" [filePath] 
   let sha1 = trim uncleanSha
   pure $ 
-    { storeBase: dropboxHome <> "/store"
+    { storeBase: storeBase
     , filePath: filePath
     , tags: tags
     , sha1: sha1
@@ -162,16 +169,55 @@ processNewDoc = do
   storeFile config.filePath originalDest
   pure $ snd originalDest
 
+openDoc :: String -> Aff Unit
+openDoc pattern = do
+  storeBase <- liftEffect findStoreBase
+  ensureRun "open \"$1\"/$2" [originalsDir storeBase, pattern <> "*"]
 
-app :: Array String -> Array String -> Effect Unit
-app [] _ = pure unit
-app files tags = do
-  dropboxHome <- findDropboxHome
+logScript :: String
+logScript = joinWith " | " script
+   where
+     script :: Array String
+     script = [ "ls -ltc \"$1\"", 
+                "tail -n +2", 
+                "head -n 20", 
+                "awk -vpath=\"$1\"/ '{ print path$9 }'", 
+                "xargs -L 1 bash -c 'for path; do stat -c \"%y %n\" $path; echo -n \"  \"; head -n 1 $path; done' bash"
+               ]
+
+app :: String -> Array String -> Array String -> Effect Unit
+app "store" _ [] = pure unit
+
+app "store" files tags = do
   launchAff_ do
     traverse_ (prepareStoreConfig tags >=> runFileProcess processNewDoc >=> liftEffect <<< log) files
 
+app "log" _ _ = launchAff_ do
+  storeBase <- liftEffect findStoreBase
+  ensureRun logScript [tagsDir storeBase]
+
+app "query" text tags = do
+  launchAff_ do
+    storeBase <- liftEffect findStoreBase
+    let fullText = joinWith "\n" text
+    when (fullText /= "") do 
+      liftEffect $ log "By Text:"
+      ensureRun "grep -Ri -F \"$1\" \"$2\"" [fullText, ocrDir storeBase]
+
+    let fullTags = joinWith "\n" tags
+    when (fullTags /= "") do 
+      liftEffect $ log "By Tags:"
+      ensureRun "grep -Ri -F \"$1\" \"$2\"" [fullTags, tagsDir storeBase]
+
+app "open" files _ = do
+  launchAff_ do
+    traverse_ openDoc files
+
+app _ _ _ = pure unit
+
 main = do
-  let setup = usage "$0 [--tag x [--tag y]] <file> [<file2>...]"
+  let setup = usage "$0 [--action store|log|query|open] [--tag x --tag y ...] [<file> <file2> ...]"
   runY setup $ app
-    <$> rest
+    <$> yarg "a" ["action"] Nothing (Left "store") false
+    <*> rest
     <*> yarg "t" ["tag"] Nothing (Left []) false
