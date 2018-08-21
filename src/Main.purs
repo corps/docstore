@@ -218,6 +218,6 @@ app _ _ _ = pure unit
 main = do
   let setup = usage "$0 [--action store|log|query|open] [--tag x --tag y ...] [<file> <file2> ...]"
   runY setup $ app
-    <$> yarg "a" ["action"] Nothing (Left "store") false
+    <$> yarg "a" ["action"] (Just "the action to take, default: store") (Left "store") false
     <*> rest
-    <*> yarg "t" ["tag"] Nothing (Left []) false
+    <*> yarg "t" ["tag"] (Just "tags to associate") (Left []) false

@@ -15,7 +15,7 @@ in
 stdenv.mkDerivation {
   name = packageJson.name;
 
-  buildInputs = [ nodejs purescript psc-package git tesseract imagemagick ghostscript ];
+  buildInputs = [ nodejs purescript psc-package git tesseract imagemagick ghostscript makeWrapper ];
 
   src = builtins.filterSource (path: type:
       type != "unknown" &&
@@ -33,14 +33,18 @@ stdenv.mkDerivation {
   ) ./.;
 
   buildPhase = ''
-    npm install
-    rm -rf src
+    export HOME=$PWD
     ln -s ${node_modules}/node_modules ./
+    psc-package install
+    psc-package build
+    rm -rf src
   '';
 
   installPhase = ''
     mkdir $out
     cp -r . $out/
+    wrapProgram $out/bin/docstore \
+      --prefix PATH : ${lib.makeBinPath [ nodejs tesseract imagemagick ghostscript ]}
   '';
 
   projectDir = toString ./.;
