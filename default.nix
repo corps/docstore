@@ -42,11 +42,12 @@ stdenv.mkDerivation {
   '';
 
   installPhase = ''
-    mkdir $out
-    cp --preserve=links -r node_modules $out/
-    cp -r bin $out/
-    cp -r output $out/
-    wrapProgram $out/bin/docstore \
+    mkdir -p $out/docstore
+    mkdir -p $out/bin
+    cp --preserve=links -r node_modules $out/docstore/
+    cp -r bin $out/docstore/
+    cp -r output $out/docstore/
+    makeWrapper $out/docstore/bin/docstore $out/bin/docstore \
       --prefix PATH : ${lib.makeBinPath [ nodejs tesseract imagemagick ghostscript ]}
   '';
 
