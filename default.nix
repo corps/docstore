@@ -33,8 +33,7 @@ stdenv.mkDerivation {
   ) ./.;
 
   buildPhase = ''
-    psc-package install
-    psc-package build
+    npm install
     rm -rf src
     ln -s ${node_modules}/node_modules ./
   '';
@@ -48,8 +47,7 @@ stdenv.mkDerivation {
 
   shellHook = ''
     echo "npm install"
-    echo "psc-package build -- --json-errors"
-    echo "purs ide server src/**/*.purs .psc-package/psc-0.12.0/**/*.purs"
+    echo "purs ide server src/**/*.purs .psc-package/psc-0.12.0/**/*.purs &> /dev/null &"
     export PATH=$projectDir/node_modules/.bin:$PATH
   '';
 }
