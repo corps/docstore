@@ -22,6 +22,7 @@ stdenv.mkDerivation {
       baseNameOf path != "node_modules" &&
       baseNameOf path != "bower_components" &&
       baseNameOf path != ".git" &&
+      baseNameOf path != ".gitignore" &&
       baseNameOf path != ".psc-ide-port" &&
       baseNameOf path != ".pulp-cache" &&
       baseNameOf path != ".psc-cache" &&
@@ -42,7 +43,9 @@ stdenv.mkDerivation {
 
   installPhase = ''
     mkdir $out
-    cp -r . $out/
+    cp --preserve=links -r node_modules $out/
+    cp -r bin $out/
+    cp -r output $out/
     wrapProgram $out/bin/docstore \
       --prefix PATH : ${lib.makeBinPath [ nodejs tesseract imagemagick ghostscript ]}
   '';
