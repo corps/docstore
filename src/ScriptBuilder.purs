@@ -7,9 +7,11 @@ import Control.Monad.RWS (get, put, modify_)
 import Control.Monad.State (State, execState)
 import Control.Monad.State.Trans (runStateT)
 import Control.Monad.Trans.Class (lift)
-import Data.Array (length)
+import Data.Array (head, init, last, length, tail, uncons, unsnoc)
+import Data.Maybe (fromMaybe)
 import Data.Semigroup (class Semigroup)
 import Data.String.Common (joinWith)
+import Pipes.Prelude (concat)
 
 type ScriptBuilderState =
   { args :: Array String
@@ -31,6 +33,13 @@ runScript runner s = runner cmd args
 
 inQuotes :: String -> String
 inQuotes s = "\"" <> s <> "\""
+
+inCapture :: Array String -> Array String
+inCapture parts = fromMaybe [] do
+  a <- uncons parts
+  let headed = ["$(" <> a.head] <> a.tail
+  b <- unsnoc headed
+  pure $ b.init <> [b.last <> ")"]
 
 asArg :: forall a. Show a => a -> ScriptBuilder String
 asArg s = do

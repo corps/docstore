@@ -24,7 +24,7 @@ import Effect.Class (liftEffect)
 import Effect.Console (log)
 import Effect.Exception (error, throwException)
 import Node.Process (lookupEnv)
-import Node.Yargs.Applicative (rest, runY, yarg)
+import Node.Yargs.Applicative (flag, rest, runY, yarg)
 import Node.Yargs.Setup (usage)
 import Paths (PathFormat, formatPath, nodePath, parsePath)
 import Runner (ensureRun, runAndCapture)
@@ -185,39 +185,41 @@ logScript = joinWith " | " script
                 "xargs -L 1 bash -c 'for path; do stat -c \"%y %n\" $path; echo -n \"  \"; head -n 1 $path; done' bash"
                ]
 
-app :: String -> Array String -> Array String -> Effect Unit
-app "store" _ [] = pure unit
+app :: String -> Array String -> Array String -> Boolean -> Boolean -> Array String -> Effect Unit
+app "store" tags names parent _ files = do
+  pure unit
 
-app "store" files tags = do
-  launchAff_ do
-    traverse_ (prepareStoreConfig tags >=> runFileProcess processNewDoc >=> liftEffect <<< log) files
+app "query" tags _ _ open words = do
+  pure unit
 
-app "log" _ _ = launchAff_ do
-  storeBase <- liftEffect findStoreBase
-  ensureRun logScript [tagsDir storeBase]
+-- app "query" text tags = do
+--   launchAff_ do
+--     storeBase <- liftEffect findStoreBase
+--     let fullText = joinWith "\n" text
+--     when (fullText /= "") do 
+--       liftEffect $ log "By Text:"
+--       ensureRun "grep -Ri -F \"$1\" \"$2\"" [fullText, ocrDir storeBase]
 
-app "query" text tags = do
-  launchAff_ do
-    storeBase <- liftEffect findStoreBase
-    let fullText = joinWith "\n" text
-    when (fullText /= "") do 
-      liftEffect $ log "By Text:"
-      ensureRun "grep -Ri -F \"$1\" \"$2\"" [fullText, ocrDir storeBase]
+--     let fullTags = joinWith "\n" tags
+--     when (fullTags /= "") do 
+--       liftEffect $ log "By Tags:"
+--       ensureRun "grep -Ri -F \"$1\" \"$2\"" [fullTags, tagsDir storeBase]
 
-    let fullTags = joinWith "\n" tags
-    when (fullTags /= "") do 
-      liftEffect $ log "By Tags:"
-      ensureRun "grep -Ri -F \"$1\" \"$2\"" [fullTags, tagsDir storeBase]
-
-app "open" files _ = do
-  launchAff_ do
-    traverse_ openDoc files
-
-app _ _ _ = pure unit
+app _ _ _ _ _ _ = pure unit
 
 main = do
   let setup = usage "$0 [--action store|log|query|open] [--tag x --tag y ...] [<file> <file2> ...]"
-  runY setup $ app
-    <$> yarg "a" ["action"] (Just "the action to take, default: store") (Left "store") false
-    <*> rest
+  runY setup $ app 
+    <$> yarg "a" ["action"] (Just "the action to take, default: store") (Left "store") false 
     <*> yarg "t" ["tag"] (Just "tags to associate") (Left []) false
+    <*> yarg "n" ["rename"] (Just "name to give stored files") (Left []) false
+    <*> flag "p" ["parent"] Nothing
+    <*> flag "o" ["open"] Nothing
+    <*> rest
+
+
+-- --action store|query
+-- --tag dir
+-- --rename n
+-- --parent
+-- --open

@@ -37,7 +37,7 @@ prepareStore = do
       config =
         { root: root
         , allRoot: root <> segment "all"
-        , tmpDir: root <> segment "tmp" 
+        , tmpDir: root <> segment "tmp"
         }
 
   ensureRun "mkdir -p \"$1\"" [show config.root]
@@ -47,9 +47,14 @@ prepareStore = do
 
 type DocSource =
   { sha :: Sha
-  , path :: Path
+  , originalExt :: Ext
+  , originalName :: Path
+  , parentDir :: Path
   }
 
-buildSource :: Sha -> StoreConfig -> DocSource
-buildSource sha config = { sha: sha, path: append config.tmpDir $ segment $ unwrap sha }
+docFile :: DocSource -> Ext -> Path
+docFile d ext = d.parentDir <> (segment $ unwrap d.sha) `addExt` ext
+
+docOriginal :: DocSource -> Path
+docOriginal d = d.parentDir <> d.originalName `addExt` d.originalExt
 
