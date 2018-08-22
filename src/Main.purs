@@ -35,7 +35,7 @@ derive instance storeBaseNewtype :: Newtype StoreBase _
 storePath :: StoreBase -> String -> String
 storePath (StoreBase a) b = a <> b
 
-type StoreConfig = 
+type StoreConfig =
   { storeBase :: StoreBase
   , formatPath :: PathFormat -> String
   , parsePath :: String -> PathFormat
