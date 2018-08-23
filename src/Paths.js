@@ -14,3 +14,8 @@ exports.formatPath = function(pathLib) {
     return pathLib.format(pathFormat);
   }
 }
+
+exports.segmentImpl = function(path) {
+  if (path[path.length - 1] == "/") return exports.segmentImpl(path.slice(0, path.length - 1));
+  return path.split("/");
+}
