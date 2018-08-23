@@ -19,11 +19,11 @@ exports.runImpl = function (cmd) {
         };
 
         if (!quiet) {
-          console.error("> bash", "-c", cmd, "--", args);
+          console.error("> ", cmd, "--", args);
         }
 
         var proc = require('child_process')
-          .spawn("bash", ["-c", cmd, "--"].concat(args), spawnOpts);
+          .spawn("bash", ["-o", "pipefail", "-c", cmd, "--"].concat(args), spawnOpts);
 
         // Could also occur when sending a message or killing went bad.
         proc.on('error', function (err) {
@@ -34,7 +34,7 @@ exports.runImpl = function (cmd) {
         if (!quiet || capture) {
           proc.stdout.on('data', function (data) {
             if (capture) capturedOutput += data.toString();
-            if (!quiet) process.stderr.write(data);
+            // if (!quiet) process.stderr.write(data);
           });
 
           proc.stderr.on('data', function (data) {

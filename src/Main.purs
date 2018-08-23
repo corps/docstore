@@ -2,11 +2,11 @@ module Main where
 
 import Paths
 import Prelude
+import QueryStore
 import Runner
 import ScriptBuilder
 import Store
 import WriteToStore
-import QueryStore
 
 import Control.Alt ((<|>))
 import Control.Applicative (class Applicative, unless, when)
@@ -18,10 +18,13 @@ import Data.Array (head, length, replicate, take, uncons, zip)
 import Data.Either (Either(..))
 import Data.Foldable (traverse_)
 import Data.Function (const)
+import Data.List (toUnfoldable)
+import Data.Map.Internal (values)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid (class Monoid)
 import Data.Newtype (class Newtype, unwrap)
 import Data.Semigroup (class Semigroup)
+import Data.String (trim)
 import Data.String.Common (joinWith, trim)
 import Data.Tuple (Tuple(..), fst, snd)
 import Data.Unfoldable (unfoldr)
@@ -38,28 +41,6 @@ import Paths (PathFormat, formatPath, nodePath, parsePath)
 
 newtype StoreBase = StoreBase String
 derive instance storeBaseNewtype :: Newtype StoreBase _
-
--- openDoc :: String -> Aff Unit
--- openDoc pattern = do
---   storeBase <- liftEffect findStoreBase
---   ensureRun "open \"$1\"/$2" [originalsDir storeBase, pattern <> "*"]
-
--- logScript :: String
--- logScript = joinWith " | " script
---    where
---      script :: Array String
---      script = [ "ls -ltc \"$1\"", 
---                 "tail -n +2", 
---                 "head -n 20", 
---                 "awk -vpath=\"$1\"/ '{ print path$9 }'", 
---                 "xargs -L 1 bash -c 'for path; do stat -c \"%y %n\" $path; echo -n \"  \"; head -n 1 $path; done' bash"
---                ]
-
-checkExists :: Path -> Aff Unit
-checkExists path =
-  runScript ensureRun do
-    path' <- asArg path
-    addWords ["[[", "-e", path', "]]"]
 
 app :: String -> Array String -> Array String -> Boolean -> Boolean -> Array String -> Effect Unit
 
@@ -79,7 +60,7 @@ app "store" tags names parent _ files = launchAff_ $ do
 
     argsForFile :: StoreConfig -> Tuple String (Maybe String) -> Aff WriteToStoreArgs
     argsForFile storeConfig (Tuple file newName) = do
-      fullPath <- runScript runAndCapture do
+      fullPath <- map trim $ runScript runAndCapture do
         path' <- asArg file
         addWords ["realpath", path']
 
@@ -106,31 +87,18 @@ app "store" tags names parent _ files = launchAff_ $ do
 -- query procedure
 app "query" tags _ _ open words = do
   launchAff_ do
-    traverse_ checkExists tagPaths
     storeConfig <- prepareStore
-    queryStore (args storeConfig)
+    let tagPaths = if tags /= [] then segment <$> tags else [storeConfig.allRoot]
 
-    where 
-      tagPaths = segment <$> tags
-      args :: StoreConfig -> QueryStoreArgs
-      args storeConfig =
-        { storeConfig: storeConfig
-        , tagPaths: tagPaths
-        , words: words
-        }
+    traverse_ checkExists tagPaths
+    let args = { storeConfig: storeConfig
+                , tagPaths: tagPaths
+                , words: words
+                }
+    found <- map toUnfoldable $ map values $ queryStore args
 
--- app "query" text tags = do
---   launchAff_ do
---     storeBase <- liftEffect findStoreBase
---     let fullText = joinWith "\n" text
---     when (fullText /= "") do 
---       liftEffect $ log "By Text:"
---       ensureRun "grep -Ri -F \"$1\" \"$2\"" [fullText, ocrDir storeBase]
-
---     let fullTags = joinWith "\n" tags
---     when (fullTags /= "") do 
---       liftEffect $ log "By Tags:"
---       ensureRun "grep -Ri -F \"$1\" \"$2\"" [fullTags, tagsDir storeBase]
+    liftEffect $ log $ joinWith "\n\n" $
+      joinWith "\n" <$> showQueryMatch <$> found
 
 app _ _ _ _ _ _ = pure unit
 

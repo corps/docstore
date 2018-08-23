@@ -41,12 +41,12 @@ inCapture parts = fromMaybe [] do
   b <- unsnoc headed
   pure $ b.init <> [b.last <> ")"]
 
-asArg :: forall a. Show a => a -> ScriptBuilder String
+asArg :: String -> ScriptBuilder String
 asArg s = do
   state <- get
   let curArgLength = length state.args
-  let argStr = inQuotes <<< show $ curArgLength + 1
-  put $ state { args = state.args <> [show s] }
+  let argStr = inQuotes $ append "$" $ show $ curArgLength + 1
+  put $ state { args = state.args <> [s] }
   pure argStr
 
 addWord :: String -> ScriptBuilder Unit

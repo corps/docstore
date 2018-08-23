@@ -6,6 +6,7 @@ import Runner
 import ScriptBuilder
 import Store
 
+import Control.Monad.Error.Class (catchError, throwError)
 import Data.HeytingAlgebra (not)
 import Data.Maybe (Maybe, fromMaybe, isNothing)
 import Data.Newtype (unwrap, wrap)
@@ -13,6 +14,7 @@ import Data.String (trim)
 import Data.Traversable (traverse)
 import Effect.Aff (Aff, bracket)
 import Effect.Class (liftEffect)
+import Effect.Exception (error)
 
 type WriteToStoreArgs =
   { originalFullPath :: Path
@@ -35,27 +37,34 @@ writeToStore' args build = do
     ".tiff" -> processOcr build
     otherwise -> pure unit
 
-  traverse (install build args.p) args.tagPaths
+  traverse (install build args.p) tagPaths
+  where tagPaths = args.tagPaths <> [ args.storeConfig.allRoot ]
 
 prepareBuildSource :: WriteToStoreArgs -> Aff DocSource
 prepareBuildSource args = do
   sha <- getShaOfPath args.originalFullPath
-  fmt <- getFormat args.originalFullPath
-
-  let name = fromMaybe fmt.name args.newName
   let buildDir = append args.storeConfig.tmpDir $ segment $ unwrap sha
+
+  mkDir buildDir
+  prepareBuildSource' args sha buildDir `catchError` (\e -> do 
+    rmDir buildDir
+    throwError e)
+
+prepareBuildSource' :: WriteToStoreArgs -> Sha -> Path -> Aff DocSource
+prepareBuildSource' args sha buildDir = do
+  fmt <- getFormat args.originalFullPath
+  let name = fromMaybe fmt.name args.newName
   let ext = Ext fmt.ext
   let namePath = (segment name) `addExt` ext
-  mkDir buildDir
 
   runScript ensureRun do
-    orig' <- asArg args.originalFullPath
-    new' <- asArg $ buildDir <> namePath
+    orig' <- asArg $ show $ args.originalFullPath
+    new' <- asArg $ show $ buildDir <> namePath
     addWords ["cp", orig', new']
 
   runScript ensureRun do
-    origPath' <- asArg $ buildDir <> segment "orig.path"
-    name' <- asArg namePath
+    origPath' <- asArg $ show $ docOriginalPath buildDir
+    name' <- asArg $ show namePath
     addWords ["echo", name', ">", origPath']
 
   pure $ { sha: sha
@@ -75,16 +84,20 @@ processOcr docSrc = do
 
   when (docSrc.originalExt /= Ext ".tiff") do
     runScript ensureRun do
-      original' <- asArg original
-      tiff' <- asArg tiff
+      original' <- asArg $ show original
+      tiff' <- asArg $ show tiff
       addWords [ "convert", "-density", "300", original', "-depth", "8", tiff' ]
 
   runScript ensureRun do
-    tiff' <- asArg tiff
-    ocr' <- asArg ocr
+    tiff' <- asArg $ show tiff
+    ocr' <- asArg $ show ocr
     addWord "tesseract"
     addWords $ realRelativePath tiff'
     addWords $ realRelativePath ocr'
+
+  runScript ensureRun do
+    tiff' <- asArg $ show tiff
+    addWords [ "rm", tiff' ]
 
 install :: DocSource -> Boolean -> Path -> Aff DocSource
 install docSrc create destRoot = do
@@ -92,15 +105,15 @@ install docSrc create destRoot = do
   let dest = append destRoot $ segment $ unwrap docSrc.sha
   when create $ mkDir destRoot
   runScript ensureRun do
-    src' <- asArg src
-    dest' <- asArg dest
+    src' <- asArg $ show src
+    dest' <- asArg $ show destRoot
     addWords ["cp", "-r", src', dest']
   pure $ docSrc { parentDir = dest }
 
 getShaOfPath :: Path -> Aff Sha
 getShaOfPath path = do
   uncleanSha <- runScript runAndCapture do
-    path' <- asArg path
+    path' <- asArg $ show path
     addWords [ "cat" , path' ]
     addPipe
     addWords [ "sha1sum" ]
@@ -116,16 +129,4 @@ getFormat p = do
 realRelativePath :: String -> Array String
 realRelativePath p = inCapture
   ["realpath", "--relative-to=" <> inQuotes "$PWD", p]
-
-mkDir :: Path -> Aff Unit
-mkDir p = do
-  runScript ensureRun do
-    p' <- asArg p
-    addWords ["mkdir", "-p", p']
-
-rmDir :: Path -> Aff Unit
-rmDir p = do
-  runScript ensureRun do
-    p' <- asArg p
-    addWords ["rm", "-rf", p']
 
