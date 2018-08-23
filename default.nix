@@ -17,7 +17,7 @@ stdenv.mkDerivation {
 
   buildInputs = [ 
     nodejs purescript psc-package git tesseract imagemagick 
-    ghostscript makeWrapper cacert awk 
+    ghostscript makeWrapper cacert gawk 
   ];
 
   src = builtins.filterSource (path: type:
@@ -51,7 +51,7 @@ stdenv.mkDerivation {
     cp -r bin $out/docstore/
     cp -r output $out/docstore/
     makeWrapper $out/docstore/bin/docstore $out/bin/docstore \
-      --prefix PATH : ${lib.makeBinPath [ nodejs tesseract imagemagick ghostscript awk ]}
+      --prefix PATH : ${lib.makeBinPath [ nodejs tesseract imagemagick ghostscript gawk ]}
   '';
 
   projectDir = toString ./.;
