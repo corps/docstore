@@ -52,6 +52,15 @@ type DocSource =
   , parentDir :: Path
   }
 
+readDocSource :: Path -> Aff DocSource
+readDocSource parentDir =
+  pure $
+    { parentDir: parentDir
+    , originalName: originalName
+    , originalExt: fmt.ext
+    , sha: sha
+    }
+
 docFile :: DocSource -> Ext -> Path
 docFile d ext = d.parentDir <> (segment $ unwrap d.sha) `addExt` ext
 

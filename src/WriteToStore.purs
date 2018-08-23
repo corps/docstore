@@ -25,10 +25,9 @@ type WriteToStoreArgs =
 type WriteToStoreRes = Array DocSource
 
 writeToStore :: WriteToStoreArgs -> Aff WriteToStoreRes
-writeToStore args = bracket (prepareBuildSource args) 
-  cleanupBuildSource 
+writeToStore args = bracket (prepareBuildSource args)
+  cleanupBuildSource
   (writeToStore' args)
-  
 writeToStore' :: WriteToStoreArgs -> DocSource -> Aff WriteToStoreRes
 writeToStore' args build = do
   case unwrap build.originalExt of
@@ -46,12 +45,18 @@ prepareBuildSource args = do
   let name = fromMaybe fmt.name args.newName
   let buildDir = append args.storeConfig.tmpDir $ segment $ unwrap sha
   let ext = Ext fmt.ext
+  let namePath = (segment name) `addExt` ext
   mkDir buildDir
-  
+
   runScript ensureRun do
     orig' <- asArg args.originalFullPath
-    new' <- asArg $ buildDir <> (segment name) `addExt` ext
+    new' <- asArg $ buildDir <> namePath
     addWords ["cp", orig', new']
+
+  runScript ensureRun do
+    origPath' <- asArg $ buildDir <> segment "orig.path"
+    name' <- asArg namePath
+    addWords ["echo", name', ">", origPath']
 
   pure $ { sha: sha
          , originalExt: ext
@@ -109,7 +114,7 @@ getFormat p = do
   pure $ parsePath pathLib $ show p
 
 realRelativePath :: String -> Array String
-realRelativePath p = inCapture 
+realRelativePath p = inCapture
   ["realpath", "--relative-to=" <> inQuotes "$PWD", p]
 
 mkDir :: Path -> Aff Unit
