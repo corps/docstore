@@ -86,7 +86,8 @@ processOcr docSrc = do
     runScript ensureRun do
       original' <- asArg $ show original
       tiff' <- asArg $ show tiff
-      addWords [ "convert", "-density", "300", original', "-depth", "8", tiff' ]
+      addWords [ "convert", "-density", "300", original', "-depth", "8", "-background", "white",
+                 "-flatten", "+matte", tiff' ]
 
   runScript ensureRun do
     tiff' <- asArg $ show tiff
